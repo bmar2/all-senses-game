@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>All-Senses Game</title>
+<style>
+:root{--bg:#0f1724;--card:#111827;--accent:#06b6d4;--muted:#94a3b8;--fg:#e6eef6;}
+*{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+body{margin:0;background:linear-gradient(180deg,#071022 0%,var(--bg) 100%);color:var(--fg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.wrap{width:100%;max-width:980px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:14px;padding:18px;box-shadow:0 10px 30px rgba(2,6,23,0.6);}
+.header{display:flex;align-items:center;gap:12px;}
+.logo{width:64px;height:64px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#8b5cf6);display:flex;align-items:center;justify-content:center;font-weight:700;color:#041022;font-size:22px;}
+h1{margin:0;font-size:20px;}
+.controls{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+.btn{background:var(--accent);color:#031025;padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:600;}
+.btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--fg);}
+.row{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;}
+.card{background:var(--card);padding:14px;border-radius:12px;flex:1;min-width:220px;box-shadow:0 4px 10px rgba(2,6,23,0.5);}
+.small{font-size:13px;color:var(--muted);}
+#gameArea{margin-top:16px;display:grid;grid-template-columns:1fr 320px;gap:12px;}
+.left{display:flex;flex-direction:column;gap:12px;}
+.tile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
+.tile{aspect-ratio:1/1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#031025;cursor:pointer;user-select:none;}
+.hidden{filter:brightness(0.25);color:transparent}
+.center{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;}
+.choice-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px;}
+.progress{height:10px;background:rgba(255,255,255,0.04);border-radius:999px;overflow:hidden;}
+.progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#8b5cf6);width:0%}
+.footer{margin-top:12px;display:flex;gap:8px;align-items:center;justify-content:space-between;}
+.link{color:var(--accent);text-decoration:underline;cursor:pointer;}
+.small-muted{font-size:12px;color:var(--muted);}
+
+/* responsive */
+@media (max-width:900px){#gameArea{grid-template-columns:1fr;}.card{min-width:unset}}
+</style>
+</head>
+<body>
+<div class="wrap" role="application" aria-label="All Senses Game">
+  <div class="header">
+    <div class="logo">AS</div>
+    <div>
+      <h1>All-Senses Game</h1>
+      <div class="small">A short, playful test of sight, hearing, touch, smell & taste (self-reported).</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn" class="btn">Start Game</button>
+    <button id="downloadBtn" class="btn secondary">Download HTML</button>
+    <div class="small-muted">Best on mobile for vibration/haptics.</div>
+  </div>
+
+  <div id="gameArea">
+    <div class="left">
+      <div class="card" id="roundCard">
+        <div class="small">Round</div>
+        <div id="roundLabel" style="font-weight:800;font-size:18px;margin-top:6px">—</div>
+        <div id="roundContent" class="center" style="margin-top:8px">
+          <div class="small-muted">Press Start to play.</div>
+        </div>
+      </div>
+
+      <div class="card" id="scoreCard">
+        <div class="small">Score</div>
+        <div style="font-size:18px;font-weight:800" id="score">0</div>
+        <div class="small-muted" style="margin-top:6px">Complete five mini-games — highest score wins.</div>
+        <div style="margin-top:8px" class="progress" aria-hidden><i id="scoreBar"></i></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="small">Game Controls</div>
+      <div style="margin-top:8px" class="row">
+        <button id="nextBtn" class="btn secondary">Next</button>
+        <button id="resetBtn" class="btn secondary">Reset</button>
+      </div>
+      <div class="small" style="margin-top:10px">Settings</div>
+      <div style="margin-top:8px" class="row">
+        <label class="small-muted"><input type="checkbox" id="soundToggle" checked/> Sound</label>
+        <label class="small-muted"><input type="checkbox" id="vibeToggle" checked/> Vibration</label>
+      </div>
+      <div class="small" style="margin-top:10px">Link</div>
+      <div style="margin-top:8px" class="small-muted">You can download and open the single HTML file locally or share it.</div>
+      <div style="margin-top:10px"><a id="localLink" class="link" download="all-senses-game.html">Download playable HTML</a></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="small-muted">Privacy: microphone input (optional) is analyzed locally only.</div>
+    <div><a id="hostLink" class="link">Host & Share (instructions)</a></div>
+  </div>
+</div>
+
+<script>
+// Game state
+const rounds = ['Sight','Hearing','Touch','Smell','Taste'];
+let state = {roundIndex: -1, score:0, sightSeq:[], sightStep:0, hearingTone:null, touchPattern:null};
+
+// UI refs
+const startBtn = document.getElementById('startBtn');
+const nextBtn = document.getElementById('nextBtn');
+const resetBtn = document.getElementById('resetBtn');
+const roundLabel = document.getElementById('roundLabel');
+const roundContent = document.getElementById('roundContent');
+const scoreEl = document.getElementById('score');
+const scoreBar = document.getElementById('scoreBar');
+const soundToggle = document.getElementById('soundToggle');
+const vibeToggle = document.getElementById('vibeToggle');
+const localLink = document.getElementById('localLink');
+const hostLink = document.getElementById('hostLink');
+const downloadBtn = document.getElementById('downloadBtn');
+
+// Prepare download link content (point to same file)
+const htmlContent = `data:text/html;charset=utf-8,${encodeURIComponent(document.documentElement.outerHTML)}`;
+localLink.href = htmlContent;
+downloadBtn.onclick = ()=>{ localLink.click(); }
+
+hostLink.onclick = ()=>{
+  alert('To host: upload the downloaded all-senses-game.html to any static host (GitHub Pages, Netlify, Vercel) or a file server. Then share the URL.');
+}
+
+// utilities
+function updateScoreBar(){
+  scoreEl.textContent = state.score;
+  const pct = Math.min(100, (state.score/(rounds.length*10))*100);
+  scoreBar.style.width = pct + '%';
+}
+function addScore(points){ state.score += points; updateScoreBar(); }
+function randInt(n){ return Math.floor(Math.random()*n); }
+
+// ROUND: Sight (memory of colors)
+function startSight(){
+  roundLabel.textContent='Sight — memorize the sequence';
+  roundContent.innerHTML='';
+  const grid = document.createElement('div');
+  grid.className='tile-grid';
+  const colors = ['#f97316','#fb7185','#60a5fa','#34d399','#fbbf24','#a78bfa'];
+  // generate a small sequence of 3-5 tiles
+  const seqLen = 4;
+  const seq = [];
+  for(let i=0;i<seqLen;i++) seq.push(randInt(6));
+  state.sightSeq = seq;
+  state.sightStep = 0;
+  // show tiles briefly
+  const tiles = [];
+  for(let i=0;i<6;i++){
+    const t = document.createElement('div');
+    t.className='tile hidden';
+    t.style.background=colors[i];
+    t.dataset.index=i;
+    t.textContent=(i+1);
+    tiles.push(t);
+    grid.appendChild(t);
+  }
+  roundContent.appendChild(grid);
+  // reveal sequence with pulses
+  let i=0;
+  const interval = setInterval(()=>{
+    tiles.forEach(x=>x.classList.add('hidden'));
+    const idx = seq[i];
+    tiles[idx].classList.remove('hidden');
+    i++;
+    if(i>=seq.length){ clearInterval(interval); setTimeout(()=>{tiles.forEach(x=>x.classList.add('hidden')); showSightChoices(colors,tiles,seq);},800); }
+  },700);
+}
+
+function showSightChoices(colors,tiles,seq){
+  roundLabel.textContent='Sight — repeat the sequence by tapping tiles';
+  roundContent.innerHTML='';
+  const grid = document.createElement('div');
+  grid.className='tile-grid';
+  tiles.forEach(t=>{
+    const clone = t.cloneNode(true);
+    clone.classList.remove('hidden');
+    clone.onclick = ()=>{
+      const idx = Number(clone.dataset.index);
+      // flash
+      clone.style.outline='3px solid rgba(255,255,255,0.15)';
+      setTimeout(()=>clone.style.outline='none',160);
+      if(seq[state.sightStep] === idx){
+        state.sightStep++;
+        if(state.sightStep === seq.length){
+          addScore(10);
+          roundContent.innerHTML = '<div class="center"><div style="font-weight:800">Nice! +10</div><div class="small-muted">Tap Next to continue.</div></div>';
+        }
+      } else {
+        roundContent.innerHTML = '<div class="center"><div style="font-weight:800">Oops — wrong tile.</div><div class="small-muted">No points. Tap Next.</div></div>';
+      }
+    };
+    grid.appendChild(clone);
+  });
+  roundContent.appendChild(grid);
+}
+
+// ROUND: Hearing (tone guess)
+let audioCtx, oscillator;
+function beep(freq,dur=500){ try{
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  const g = audioCtx.createGain();
+  const o = audioCtx.createOscillator();
+  o.type='sine'; o.frequency.value=freq;
+  o.connect(g); g.connect(audioCtx.destination);
+  g.gain.value=0.0001;
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.2,audioCtx.currentTime+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+dur/1000);
+  setTimeout(()=>{ o.stop(); g.disconnect(); },dur+50);
+} catch(e){ console.warn(e); } }
+function startHearing(){
+  roundLabel.textContent='Hearing — listen and pick the higher tone';
+  roundContent.innerHTML='';
+  const base = 220 + randInt(220);
+  const higher = base + (20 + randInt(150));
+  // randomize order
+  const order = Math.random()>.5 ? [base,higher] : [higher,base];
+  state.hearingTone = {base,higher,order};
+  const info = document.createElement('div');
+  info.className='center';
+  info.innerHTML = '<div class="small-muted">Tap Play to hear two tones</div>';
+  const play = document.createElement('button'); play.className='btn'; play.textContent='Play Tones';
+  play.onclick = ()=>{
+    // play first then second quickly
+    beep(order[0],450);
+    setTimeout(()=>beep(order[1],450),600);
+  };
+  const choices = document.createElement('div'); choices.className='choice-grid';
+  ['First','Second'].forEach((label,i)=>{
+    const b = document.createElement('button'); b.className='btn secondary'; b.textContent=label;
+    b.onclick = ()=>{
+      const chosen = order[i];
+      const correct = Math.max(base,higher) === chosen;
+      if(correct){ addScore(10); roundContent.innerHTML='<div class="center"><div style="font-weight:800">Correct! +10</div><div class="small-muted">Tap Next to continue.</div></div>'; }
+      else { roundContent.innerHTML='<div class="center"><div style="font-weight:800">Not quite.</div><div class="small-muted">No points. Tap Next.</div></div>'; }
+    };
+    choices.appendChild(b);
+  });
+  info.appendChild(play);
+  info.appendChild(choices);
+  roundContent.appendChild(info);
+}
+
+// ROUND: Touch (vibration pattern)
+function vibratePattern(pattern){ if(navigator.vibrate){ navigator.vibrate(pattern); } }
+function startTouch(){
+  roundLabel.textContent='Touch — feel the vibration and choose the pattern';
+  roundContent.innerHTML='';
+  const patterns = [
+    [200,100,200],
+    [400,200],
+    [100,100,100,100],
+    [600]
+  ];
+  const choiceIdx = randInt(patterns.length);
+  state.touchPattern = choiceIdx;
+  const info = document.createElement('div'); info.className='center';
+  info.innerHTML = '<div class="small-muted">Tap Play to feel a vibration pattern (mobile).</div>';
+  const play = document.createElement('button'); play.className='btn'; play.textContent='Play Pattern';
+  play.onclick = ()=>{ if(vibeToggle.checked) vibratePattern(patterns[choiceIdx]); else alert('Vibration disabled in settings.'); };
+  const choices = document.createElement('div'); choices.className='choice-grid';
+  patterns.forEach((p,i)=>{
+    const b = document.createElement('button'); b.className='btn secondary'; b.textContent='Pattern '+(i+1);
+    b.onclick = ()=>{
+      if(i===choiceIdx){ addScore(10); roundContent.innerHTML='<div class="center"><div style="font-weight:800">Matched! +10</div><div class="small-muted">Tap Next to continue.</div></div>'; }
+      else { roundContent.innerHTML='<div class="center"><div style="font-weight:800">Nope.</div><div class="small-muted">No points. Tap Next.</div></div>'; }
+    };
+    choices.appendChild(b);
+  });
+  info.appendChild(play); info.appendChild(choices); roundContent.appendChild(info);
+}
+
+// ROUND: Smell (self-report)
+function startSmell(){
+  roundLabel.textContent='Smell — self-report what you smell';
+  roundContent.innerHTML='';
+  const prompt = document.createElement('div'); prompt.className='center';
+  prompt.innerHTML = '<div class="small-muted">Find one safe-smelling item nearby (lemon, coffee, vanilla, soap). Hold it and take a sniff.</div>';
+  const options = ['Citrus (lemon)','Coffee/roast','Sweet (vanilla/sugar)','Floral (soap)','None/Can\'t'];
+  const grid = document.createElement('div'); grid.className='choice-grid';
+  options.forEach((opt,i)=>{
+    const b=document.createElement('button'); b.className='btn secondary'; b.textContent=opt;
+    b.onclick = ()=>{
+      // no way to verify — self-report scoring: if not "None", award points.
+      if(i<4){ addScore(6); roundContent.innerHTML='<div class="center"><div style="font-weight:800">Thanks — logged. +6</div><div class="small-muted">Self-report only. Tap Next.</div></div>'; }
+      else { roundContent.innerHTML='<div class="center"><div style="font-weight:800">No smell detected.</div><div class="small-muted">No points. Tap Next.</div></div>'; }
+    };
+    grid.appendChild(b);
+  });
+  prompt.appendChild(grid);
+  roundContent.appendChild(prompt);
+}
+
+// ROUND: Taste (self-report)
+function startTaste(){
+  roundLabel.textContent='Taste — safe self-test';
+  roundContent.innerHTML='';
+  const prompt = document.createElement('div'); prompt.className='center';
+  prompt.innerHTML = '<div class="small-muted">Find a tiny amount of a safe item (sugar, salt). Place a small taste and select what you perceived. Do not try unknown substances.</div>';
+  const options = ['Sweet','Salty','Sour','Bitter','None/Can\'t'];
+  const grid = document.createElement('div'); grid.className='choice-grid';
+  options.forEach((opt,i)=>{
+    const b=document.createElement('button'); b.className='btn secondary'; b.textContent=opt;
+    b.onclick = ()=>{
+      if(i<4){ addScore(6); roundContent.innerHTML='<div class="center"><div style="font-weight:800">Thanks — logged. +6</div><div class="small-muted">Self-report only. Tap Next.</div></div>'; }
+      else { roundContent.innerHTML='<div class="center"><div style="font-weight:800">No taste detected.</div><div class="small-muted">No points. Tap Next.</div></div>'; }
+    };
+    grid.appendChild(b);
+  });
+  prompt.appendChild(grid);
+  roundContent.appendChild(prompt);
+}
+
+// flow control
+function nextRound(){
+  state.roundIndex++;
+  if(state.roundIndex >= rounds.length){
+    roundLabel.textContent='Finished — results';
+    roundContent.innerHTML = `<div class="center"><div style="font-weight:800">Game over</div><div class="small-muted">Final score: ${state.score}</div><div style="margin-top:8px"><button class="btn" onclick="location.reload()">Play again</button></div></div>`;
+    return;
+  }
+  const r = rounds[state.roundIndex];
+  // choose round handler
+  if(r==='Sight') startSight();
+  if(r==='Hearing') startHearing();
+  if(r==='Touch') startTouch();
+  if(r==='Smell') startSmell();
+  if(r==='Taste') startTaste();
+  updateScoreBar();
+}
+
+startBtn.onclick = ()=>{
+  state.roundIndex = -1; state.score=0; updateScoreBar(); nextRound();
+};
+nextBtn.onclick = ()=> nextRound();
+resetBtn.onclick = ()=> location.reload();
+
+// Microphone loudness optional (not used in rounds but available)
+async function askMic(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser(); analyser.fftSize=512;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let raf;
+    const el = document.createElement('div'); el.className='center'; el.innerHTML = '<div class="small-muted">Listening... make a sound.</div>';
+    roundContent.innerHTML=''; roundContent.appendChild(el);
+    function loop(){
+      analyser.getByteTimeDomainData(data);
+      let sum=0; for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum+=v*v; }
+      const rms=Math.sqrt(sum/data.length);
+      if(rms>0.05){ el.innerHTML = '<div style="font-weight:800">Heard a sound.</div><div class="small-muted">Use this for optional loudness-based mini-games.</div>'; cancelAnimationFrame(raf); stream.getTracks().forEach(t=>t.stop()); }
+      else raf = requestAnimationFrame(loop);
+    }
+    loop();
+  }catch(e){ alert('Microphone not available or permission denied.'); }
+}
+
+// expose for buttons in content (used by sight play again)
+window.askMic = askMic;
+</script>
+</body>
+</html>
